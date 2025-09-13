@@ -51,8 +51,8 @@ resource "aws_ecs_cluster" "tst-cluster" {
 
 resource "aws_launch_template" "foobar" {
   name_prefix   = "test-lt"
-  image_id      = data.aws_ami.aws1.id
-  instance_type = "t2.micro"
+  image_id      = "ami-0bacd2d203828f784"
+  instance_type = "t2.medium"
   iam_instance_profile {
     name = aws_iam_instance_profile.instance-profile.name
   }
@@ -61,7 +61,7 @@ resource "aws_launch_template" "foobar" {
 
 resource "aws_autoscaling_group" "bar" {
   depends_on         = [aws_launch_template.foobar]
-  availability_zones = ["us-east-1a"]
+  availability_zones = ["us-west-1a"]
   desired_capacity   = 1
   max_size           = 1
   min_size           = 1
@@ -72,30 +72,70 @@ resource "aws_autoscaling_group" "bar" {
   }
 }
 
-resource "aws_ecs_task_definition" "demo-td" {
-  family = "nginx-td"
+resource "aws_ecs_task_definition" "nexus" {
+  family                   = "nexus-tdef"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
+  cpu                      = "1024"
+  memory                   = "2048"
+  execution_role_arn       = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
+  task_role_arn            = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
+
   container_definitions = jsonencode([
     {
-      name             = "nginx"
-      image            = "nginx:stable-alpine3.21-perl"
-      cpu              = 256
-      memory           = 512
-      essential        = true
-      task_role_arn    = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
-      executionRoleArn = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
+      name      = "nexus"
+      image     = "296352766082.dkr.ecr.us-east-1.amazonaws.com/nexus:3.76"
+      essential = true
+      cpu       = 1024
+      memory    = 2048
+
       portMappings = [
         {
-          containerPort = 80
+          containerPort = 8081
           hostPort      = 8081
+          protocol      = "tcp"
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "nexus-efs-data"
+          containerPath = "/opt/nexus/data"
+          readOnly      = false
+        },
+        {
+          sourceVolume  = "nexus-efs-logs"
+          containerPath = "/opt/nexus/logs"
+          readOnly      = false
         }
       ]
     }
   ])
+  volume {
+    name = "nexus-efs-data"
+
+    efs_volume_configuration {
+      file_system_id     = "fs-014344ea414800be8"
+      root_directory     = "/"
+      transit_encryption = "ENABLED"
+
+    }
+  }
+  volume {
+    name = "nexus-efs-logs"
+
+    efs_volume_configuration {
+      file_system_id     = "fs-014344ea414800be8"
+      root_directory     = "/"
+      transit_encryption = "ENABLED"
+
+    }
+  }
 }
 
 resource "aws_ecs_service" "demo-service" {
-  name            = "nginx-service"
+  name            = "nexus-service"
   cluster         = aws_ecs_cluster.tst-cluster.id
-  task_definition = aws_ecs_task_definition.demo-td.arn
+  task_definition = aws_ecs_task_definition.nexus.arn
   desired_count   = 1
 }

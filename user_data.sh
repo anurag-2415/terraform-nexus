@@ -2,6 +2,7 @@
 sudo dnf update -y
 sudo dnf install -y docker
 sudo systemctl enable --now docker
+sudo yum install -y amazon-efs-utils
 sudo usermod -aG docker ec2-user
 docker pull amazon/amazon-ecs-agent:latest
 docker run --name ecs-agent --detach \
