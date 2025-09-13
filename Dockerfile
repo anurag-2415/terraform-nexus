@@ -25,8 +25,7 @@ RUN groupadd -g 200 -r nexus \
     && useradd -u 200 -r nexus -g nexus -s /bin/false -d /opt/sonatype/nexus -c 'Nexus Repository Manager user'
 
 WORKDIR /opt/sonatype
-
-COPY jdk-17.0.12_linux-x64_bin.tar.gz ${SONATYPE_DIR}/
+RUN wget https://download.oracle.com/java/17/archive/jdk-17.0.12_linux-x64_bin.tar.gz
 COPY nexus-3.76.0-03-unix.tar.gz ${SONATYPE_DIR}/
 RUN tar -xzvf nexus-3.76.0-03-unix.tar.gz \
     && tar -xzvf jdk-17.0.12_linux-x64_bin.tar.gz \
@@ -53,3 +52,11 @@ USER nexus
 ENV INSTALL4J_ADD_VM_PARAMS="-Xms256m -Xmx256m -XX:MaxDirectMemorySize=256m -Djava.util.prefs.userRoot=${NEXUS_DATA}/javaprefs"
 
 CMD ["/opt/sonatype/nexus/bin/nexus", "run"]
+
+
+
+
+chown -R 200:200 /mnt/efs/opt/nexus/data
+sudo chmod -R 770 /mnt/efs/opt/nexus/data
+sudo chown -R 200:200 /mnt/efs/opt/nexus/logs
+sudo chmod -R 770 /mnt/efs/opt/nexus/logs

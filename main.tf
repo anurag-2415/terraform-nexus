@@ -1,9 +1,9 @@
-data "aws_ami" "aws1" {
+data "aws_ami" "ecs_optimized" {
   most_recent = true
 
   filter {
     name   = "name"
-    values = ["al2023-ami-2023.8.20250818.0-kernel-6.1-x86_64"]
+    values = ["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
   }
 
   filter {
@@ -11,7 +11,67 @@ data "aws_ami" "aws1" {
     values = ["hvm"]
   }
 
-  owners = ["137112412989"] # Canonical
+  owners = ["591542846629"]
+}
+
+
+resource "aws_efs_file_system" "nexus" {
+  creation_token = "nexus-efs"
+  encrypted      = true
+  lifecycle_policy {
+    transition_to_ia = "AFTER_30_DAYS"
+  }
+  tags = {
+    Name = "nexus-efs"
+  }
+}
+
+resource "aws_efs_mount_target" "nexus_az1" {
+  file_system_id  = aws_efs_file_system.nexus.id
+  subnet_id       = "subnet-00f1be2cc61fe155c" 
+  security_groups = ["sg-09f4b4a5801b31185"]  
+}
+
+resource "aws_efs_mount_target" "nexus_az2" {
+  file_system_id  = aws_efs_file_system.nexus.id
+  subnet_id       = "subnet-0ca792222c939242e"
+  security_groups = ["sg-09f4b4a5801b31185"]
+}
+
+resource "aws_efs_access_point" "nexus_data" {
+  file_system_id = aws_efs_file_system.nexus.id
+
+  posix_user {
+    uid = 200
+    gid = 200
+  }
+
+  root_directory {
+    path = "/data"
+    creation_info {
+      owner_gid = 200
+      owner_uid = 200
+      permissions = "770"
+    }
+  }
+}
+
+resource "aws_efs_access_point" "nexus_logs" {
+  file_system_id = aws_efs_file_system.nexus.id
+
+  posix_user {
+    uid = 200
+    gid = 200
+  }
+
+  root_directory {
+    path = "/logs"
+    creation_info {
+      owner_gid = 200
+      owner_uid = 200
+      permissions = "770"
+    }
+  }
 }
 
 resource "aws_iam_instance_profile" "instance-profile" {
@@ -36,7 +96,7 @@ resource "aws_iam_role" "role" {
   name                = "demo-ecs_role"
   path                = "/"
   assume_role_policy  = data.aws_iam_policy_document.assume_role.json
-  managed_policy_arns = ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"]
+  managed_policy_arns = ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role", "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess", "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"]
 }
 
 
@@ -51,8 +111,8 @@ resource "aws_ecs_cluster" "tst-cluster" {
 
 resource "aws_launch_template" "foobar" {
   name_prefix   = "test-lt"
-  image_id      = "ami-0bacd2d203828f784"
-  instance_type = "t2.medium"
+  image_id      = data.aws_ami.ecs_optimized.id
+  instance_type = "t2.large"
   iam_instance_profile {
     name = aws_iam_instance_profile.instance-profile.name
   }
@@ -76,18 +136,18 @@ resource "aws_ecs_task_definition" "nexus" {
   family                   = "nexus-tdef"
   requires_compatibilities = ["EC2"]
   network_mode             = "bridge"
-  cpu                      = "1024"
-  memory                   = "2048"
+  cpu                      = "1524"
+  memory                   = "4048"
   execution_role_arn       = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
   task_role_arn            = "arn:aws:iam::296352766082:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
     {
       name      = "nexus"
-      image     = "296352766082.dkr.ecr.us-east-1.amazonaws.com/nexus:3.76"
+      image     = "296352766082.dkr.ecr.us-west-1.amazonaws.com/nexus:3.76"
       essential = true
-      cpu       = 1024
-      memory    = 2048
+      cpu       = 1524
+      memory    = 4048
 
       portMappings = [
         {
@@ -111,26 +171,36 @@ resource "aws_ecs_task_definition" "nexus" {
       ]
     }
   ])
+
   volume {
-    name = "nexus-efs-data"
+  name = "nexus-efs-data"
 
-    efs_volume_configuration {
-      file_system_id     = "fs-014344ea414800be8"
-      root_directory     = "/"
-      transit_encryption = "ENABLED"
+  efs_volume_configuration {
+    file_system_id     = aws_efs_file_system.nexus.id
+    root_directory     = "/"
+    transit_encryption = "ENABLED"
 
+    authorization_config {
+      access_point_id = aws_efs_access_point.nexus_data.id
+      iam             = "DISABLED"
     }
   }
-  volume {
-    name = "nexus-efs-logs"
+}
 
-    efs_volume_configuration {
-      file_system_id     = "fs-014344ea414800be8"
-      root_directory     = "/"
-      transit_encryption = "ENABLED"
+volume {
+  name = "nexus-efs-logs"
 
+  efs_volume_configuration {
+    file_system_id     = aws_efs_file_system.nexus.id
+    root_directory     = "/"
+    transit_encryption = "ENABLED"
+
+    authorization_config {
+      access_point_id = aws_efs_access_point.nexus_logs.id
+      iam             = "DISABLED"
     }
   }
+}
 }
 
 resource "aws_ecs_service" "demo-service" {
