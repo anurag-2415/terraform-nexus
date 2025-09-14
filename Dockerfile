@@ -38,25 +38,13 @@ RUN tar -xzvf nexus-3.76.0-03-unix.tar.gz \
 
 RUN sed -i '/^-Xms/d;/^-Xmx/d;/^-XX:MaxDirectMemorySize/d' $NEXUS_HOME/bin/nexus.vmoptions
 
-RUN echo "#!/bin/bash" >> ${SONATYPE_DIR}/start-nexus-repository-manager.sh \
-    && echo "cd /opt/sonatype/nexus" >> ${SONATYPE_DIR}/start-nexus-repository-manager.sh \
-    && echo "exec ./bin/nexus run" >> ${SONATYPE_DIR}/start-nexus-repository-manager.sh \
-    && chmod a+x ${SONATYPE_DIR}/start-nexus-repository-manager.sh \
-    && sed -e '/^nexus-context/ s:$:${NEXUS_CONTEXT}:' -i ${NEXUS_HOME}/etc/nexus-default.properties
+RUN sed -e '/^nexus-context/ s:$:${NEXUS_CONTEXT}:' -i ${NEXUS_HOME}/etc/nexus-default.properties
 
 VOLUME ${NEXUS_DATA}
 
 EXPOSE 8081
 USER nexus
 
-ENV INSTALL4J_ADD_VM_PARAMS="-Xms256m -Xmx256m -XX:MaxDirectMemorySize=256m -Djava.util.prefs.userRoot=${NEXUS_DATA}/javaprefs"
+ENV INSTALL4J_ADD_VM_PARAMS="-Xms1256m -Xmx1256m -XX:MaxDirectMemorySize=1256m -Djava.util.prefs.userRoot=${NEXUS_DATA}/javaprefs"
 
 CMD ["/opt/sonatype/nexus/bin/nexus", "run"]
-
-
-
-
-chown -R 200:200 /mnt/efs/opt/nexus/data
-sudo chmod -R 770 /mnt/efs/opt/nexus/data
-sudo chown -R 200:200 /mnt/efs/opt/nexus/logs
-sudo chmod -R 770 /mnt/efs/opt/nexus/logs

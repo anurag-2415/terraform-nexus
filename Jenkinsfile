@@ -8,7 +8,7 @@ pipeline {
             steps {
                 sh '''
                 terraform init
-                terraform plan -out=plan.out
+                terraform plan -out=plan.out -no-color
                 '''
             }
         }
@@ -25,7 +25,7 @@ pipeline {
         stage('apply') {
             steps {
                 sh '''
-                terraform apply plan.out
+                terraform apply plan.out -no-color
                 '''
             }
         }
