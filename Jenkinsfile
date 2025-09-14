@@ -12,14 +12,14 @@ pipeline {
                 '''
             }
         }
-        stage('Manual Approval') {
-            steps {
-                script {
-                    def userInput = input(id: 'ProceedConfirmation', message: 'Do you want to proceed with deployment?', ok: 'Proceed', submitter: 'admin, devops')
-                    echo "User selected: ${userInput.Environment}"
-                }
-            }
-        }
+        stage('Deployment') {
+	            steps {
+	                timeout(time: 15, unit: "MINUTES") {
+	                    input message: 'Do you want to approve the deployment?', ok: 'Yes'
+	                }
+	                echo "Initiating deployment"
+	            }
+	        }
         stage('apply') {
             steps {
                 sh '''
